@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: fastapi-nginx
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - fastapi-app
+    networks:
+      - fastapi-network
+
+  fastapi-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fastapi-app
+    restart: always
+    ports:
+      - "3003:3003"
+    environment:
+      PORT: 3003
+      HOST: 0.0.0.0
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://fastapiuser:fastapipass@fastapi-db:5432/fastapidb}
+    depends_on:
+      fastapi-db:
+        condition: service_healthy
+    networks:
+      - fastapi-network
+
+  fastapi-db:
+    image: postgres:16-alpine
+    container_name: fastapi-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: fastapiuser
+      POSTGRES_PASSWORD: fastapipass
+      POSTGRES_DB: fastapidb
+    ports:
+      - "5432:5432"
+    volumes:
+      - fastapi_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fastapiuser -d fastapidb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fastapi-network
+
+volumes:
+  fastapi_pgdata:
+
+networks:
+  fastapi-network:
+    driver: bridge

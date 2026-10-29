@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: nest-nginx
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - nest-app
+    networks:
+      - nest-network
+
+  nest-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nest-app
+    restart: always
+    ports:
+      - "3002:3002"
+    environment:
+      PORT: 3002
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:-postgresql://nestuser:nestpass@nest-db:5432/nestdb?schema=public}
+    depends_on:
+      nest-db:
+        condition: service_healthy
+    networks:
+      - nest-network
+
+  nest-db:
+    image: postgres:16-alpine
+    container_name: nest-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: nestuser
+      POSTGRES_PASSWORD: nestpass
+      POSTGRES_DB: nestdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - nest_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nestuser -d nestdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nest-network
+
+volumes:
+  nest_pgdata:
+
+networks:
+  nest-network:
+    driver: bridge
